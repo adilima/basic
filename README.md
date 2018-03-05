@@ -19,6 +19,15 @@ If i = j Then
    DoSomething
 End If
 
+For i = 0 To 3
+    puts "inside i..."
+    For j = 0 To 6 Step 2
+        puts "... inside j..."
+    Next j
+    puts "... out from j..."
+Next i
+
+
 ```
 
 
