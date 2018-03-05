@@ -21,10 +21,6 @@ End If
 
 ```
 
-The second one will fail for sure, and just like before, __i__ will get assigned
-with the value of __j__, because there is still no way to tell that we use the operator
-for comparison, and not for assignment.
-
 
 ## Parser Rules
 
