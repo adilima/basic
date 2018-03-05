@@ -5,7 +5,7 @@
 using namespace basic;
 using namespace llvm;
 
-static int BASIC_INTERPRETER_VERSION = 0x08;
+static int BASIC_INTERPRETER_VERSION = 0x09;
 
 typedef struct yy_buffer_state *YY_BUFFER_STATE;
 extern YY_BUFFER_STATE yy_scan_string(const char* strBuff);
@@ -529,6 +529,24 @@ statement* interpreter::last_context()
 {
 	if (!m_statementList.empty())
 		return m_statementList.front();
+	return nullptr;
+}
+
+for_stmt* interpreter::find_last_for(const char* strId)
+{
+	if (m_statementList.empty())
+		return nullptr;
+
+	for (auto pObj: m_statementList)
+	{
+		if (pObj->type() == FOR)
+		{
+			for_stmt* stmt = static_cast<for_stmt*>(pObj);
+			if (stmt->is_equal(strId))
+				return stmt;
+		}
+	}
+	// not found
 	return nullptr;
 }
 

@@ -1,6 +1,6 @@
 
-SOURCES = parser.cpp lexer.cpp interp.cpp main.cpp basic.cpp if_stmt.cpp
-OBJECTS = parser.o lexer.o interp.o main.o basic.o if_stmt.o
+SOURCES = parser.cpp lexer.cpp interp.cpp main.cpp basic.cpp if_stmt.cpp for_stmt.cpp
+OBJECTS = parser.o lexer.o interp.o main.o basic.o if_stmt.o for_stmt.o
 
 LIBS    = -pthread -ldl -lm -lrt -lncursesw `llvm-config --libs`
 LDFLAGS = `llvm-config --ldflags` -L.

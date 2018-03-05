@@ -98,6 +98,47 @@ namespace basic
 		llvm::BasicBlock* m_falseBlock;
 	};
 
+	class for_stmt : public statement
+	{
+	public:
+		for_stmt();
+		// dont use the following, still tentative, maybe removed
+		for_stmt(for_stmt* top);
+		// use this instead
+		for_stmt(llvm::BasicBlock* parentBlock, llvm::Value* vCounter);
+		~for_stmt();
+
+		llvm::BasicBlock* get_start_block()
+		{ return m_startBlock; }
+		llvm::BasicBlock* get_next_block()
+		{ return m_nextBlock; }
+		llvm::BasicBlock* get_exit_block()
+		{ return m_exitBlock; }
+
+		void get_debug_string(std::string& buffer);
+
+		// if false, then the condition is invalid
+		bool set_condition(llvm::Value* vStart, llvm::Value* vEnd);
+		bool set_condition(llvm::Value* vStart, llvm::Value* vEnd, llvm::Value* vStep);
+
+		// we only write next when the user write it
+		void write_next();
+
+		// useful for matching next
+		bool is_equal(const char* strId);
+
+	private:
+		llvm::BasicBlock* m_parentBlock;
+		llvm::BasicBlock* m_startBlock;
+		llvm::BasicBlock* m_loopBlock;
+		llvm::BasicBlock* m_nextBlock;
+		llvm::BasicBlock* m_exitBlock;
+		llvm::Value* m_varCounter; // the counter, must be a variable (AllocaInst)
+		llvm::Value* m_startValue; // we will assign the start value to the counter
+		llvm::Value* m_endValue;   // must be a constant expr
+		llvm::Value* m_stepValue;  // the caller supply the step, if not then it will be 1, doesnt matter the type
+	};
+
 	class interpreter : public llvm::LLVMContext
 	{
 	public:
@@ -160,6 +201,10 @@ namespace basic
 		// does not pop
 		statement* last_context();
 
+		// find the last for_stmt context
+		// it may not be teh same ID, or may not be found either
+		for_stmt* find_last_for(const char* strId);
+
 	private:
 		std::unique_ptr<llvm::Module> module;
 		llvm::BasicBlock* m_entryBlock;
@@ -180,6 +225,7 @@ typedef union basic_parser_types
 	std::vector<llvm::Value*>* llvmValueList;
 	basic::dim_stmt* dim;
 	basic::if_stmt* ifStmt;
+	basic::for_stmt* forStmt;
 } basic_parser_types;
 
 #endif /* BASIC_COMMON_H */

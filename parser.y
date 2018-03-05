@@ -18,6 +18,7 @@ extern void yyerror(basic::interpreter* interp, const char* msg);
 %type <dim> dim_stmt
 %type <ifStmt> if_stmt
 %type <llvmValueList> argument_list
+%type <forStmt> for_stmt
 
 
 %left '+' '-' '*' '/'
@@ -46,6 +47,11 @@ line:
 }
 |   if_stmt {
     std::string buff("IF ");
+	$1->get_debug_string(buff);
+	std::cerr << buff << "\n";
+}
+|   for_stmt {
+    std::string buff("FOR ");
 	$1->get_debug_string(buff);
 	std::cerr << buff << "\n";
 }
@@ -248,6 +254,49 @@ function_call:
 	$$ = pResult;
 }
 |   ID '(' argument_list ')' {
+}
+;
+
+for_stmt:
+	FOR ID '=' constant TO constant {
+	llvm::Value* pVar = interp->find_variable($2);
+	if (!pVar)
+	{
+	    std::string buff("Undefined identifier: ");
+		buff += $2;
+		yyerror(interp, buff.c_str());
+		YYERROR;
+	}
+	basic::for_stmt* pObj = new basic::for_stmt(interp->get_current_block(), pVar);
+	pObj->set_condition($4, $6);
+	$$ = pObj;
+}
+|   FOR ID '=' constant TO constant STEP constant {
+    // the only different is the STEP value
+	llvm::Value* pVar = interp->find_variable($2);
+	if (!pVar)
+	{
+	    std::string buff("Undefined identifier: ");
+		buff += $2;
+		yyerror(interp, buff.c_str());
+		YYERROR;
+	}
+	basic::for_stmt* pObj = new basic::for_stmt(interp->get_current_block(), pVar);
+	pObj->set_condition($4, $6, $8);
+	$$ = pObj;
+}
+|   NEXT ID {
+    // lookup the previous context to find the for with varCounter == ID
+	basic::for_stmt* pObj = interp->find_last_for($2);
+	if (!pObj)
+	{
+	    std::string strErr("Invalid Next control for ");
+		strErr += $2;
+		yyerror(interp, strErr.c_str());
+		YYERROR;
+	}
+	pObj->write_next();
+	$$ = pObj;
 }
 ;
 
