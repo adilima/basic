@@ -5,34 +5,37 @@ basic::interpreter* interp = nullptr;
 
 int main(int argc, char** argv)
 {
-	basic::interpreter bi("interpreter_session");
+	basic::interpreter bi("session");
 	bi.print_version(std::cout);
 	std::cout << "\nbasic:$ ";
 
 	std::string buff;
 	std::string cmd;
 
+	std::ofstream bas_mod("session.bas");
+
 	while (std::getline(std::cin, buff))
 	{
 		cmd = buff.substr(0, buff.find_first_of(' '));
-		if ((cmd == "quit") || (cmd == "exit"))
+		if ((cmd == "quit"))
 		{
 			// bail
 			break;
 		}
-		bi.eval(buff);
+		if (bi.eval(buff) >= 0)
+		{
+			// record the statement into a file
+			bas_mod << buff << "\n";
+		}
 		std::cout << "basic:$ ";
 	}
 
-/*
- * Never define the following:
- * Will create a mess (multiple ret value).
- *
-	llvm::IRBuilder<> builder(bi.get_current_block());
-	builder.CreateRetVoid();
-*/
+	bas_mod.close();
 
-	buff = "; Basic Interpreter Session\n";
+	// this should make correct return void
+	bi.quit();
+
+	buff = "; Output from Basic Interpreter Session";
 	bi.print_module(buff);
 	std::cout << buff << "\n";
 

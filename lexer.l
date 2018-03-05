@@ -26,42 +26,20 @@ In the version, a STRING must already be an expression,
 so we just create one from here.
 */
 yytext[strlen(yytext)-1] = '\0';
-yylval->llvmConstantPtr = llvm::ConstantDataArray::getString(*interp, &yytext[1]);
+yylval->llvmConstant = llvm::ConstantDataArray::getString(*interp, &yytext[1]);
 return STRING;
 }
 
 {DIGIT}+ {
 long nValue = atol(yytext);
-if (nValue > 0xFFFFFFFF)
-{
-	yylval->llvmConstantPtr = llvm::ConstantInt::get(llvm::Type::getInt64Ty(*interp),
-	    nValue, true);
-	return LONG;
-}
-else if (nValue <= 0xFF)
-{
-    /* Byte is always unsigned */
-    yylval->llvmConstantPtr = llvm::ConstantInt::get(llvm::Type::getInt8Ty(*interp),
-	    nValue, false);
-	return BYTE;
-}
-/* otherwise, always return Int32 */
-yylval->llvmConstantPtr = llvm::ConstantInt::get(llvm::Type::getInt32Ty(*interp),
-    nValue, true);
-return INTEGER;
+yylval->llvmConstant = interp->get_constant_long(nValue);
+return LONG;
 }
 
 {FLOAT} {
-double d = atof(yytext);
-if (d > (double)std::numeric_limits<float>::max())
-{
-	yylval->llvmConstantPtr = llvm::ConstantFP::get(llvm::Type::getDoubleTy(*interp),
-	    d);
-	return DOUBLE;
-}
-yylval->llvmConstantPtr = llvm::ConstantFP::get(llvm::Type::getFloatTy(*interp),
-    d);
-return SINGLE;
+double dValue = atof(yytext);
+yylval->llvmConstant = interp->get_constant_double(dValue);
+return DOUBLE;
 }
 
 {COMMON_OPERATOR} { return yytext[0]; }
@@ -69,10 +47,10 @@ return SINGLE;
 false|False|true|True {
 if (!strcasecmp(yytext, "false"))
 {
-    yylval->llvmConstantPtr = llvm::ConstantInt::getFalse(*interp);
+    yylval->llvmConstant = llvm::ConstantInt::getFalse(*interp);
 	return BOOLEAN;
 }
-yylval->llvmConstantPtr = llvm::ConstantInt::getTrue(*interp);
+yylval->llvmConstant = llvm::ConstantInt::getTrue(*interp);
 return BOOLEAN;
 }
 
@@ -182,30 +160,16 @@ else if (!strcasecmp(yytext, "string"))
    yylval->typeID = STRING;
    return TYPEID;
 }
-else if (!strcmp(yytext, "end"))
+else if (!strcasecmp(yytext, "end"))
 {
     yylval->typeID = END;
 	return END;
 }
-else if (interp->is_function_name(yytext))
-{
-    yylval->identifier = strdup(yytext);
-	if (interp->is_current_function_name(yytext))
-	    return CURRENT_FUNCTION_NAME;
-	return FUNCTION_NAME;
-}
 else
 {
-    /* try to get a variable with the name */
-	llvm::Value* pVar = interp->get_variable(interp->get_current_block(), yytext);
-	if (pVar)
-	{
-		yylval->llvmValuePtr = pVar;
-		return VAR;
-	}
+    yylval->identifier = strdup(yytext);
+    return ID;
 }
-yylval->identifier = strdup(yytext);
-return ID;
 }
 
 \n  return yytext[0];

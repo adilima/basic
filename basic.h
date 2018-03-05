@@ -16,224 +16,170 @@
 
 namespace basic
 {
-    struct variable
-    {
-        int typeId;
-        std::string name;
-        std::variant<llvm::Value*, llvm::Constant*> value;
-        llvm::AllocaInst* allocation;
+	class statement
+	{
+	public:
+		statement(int tok, const char* sname);
+		statement(statement* parent, int tok, const char* sname);
+		virtual ~statement();
 
-        /* should be the allocation, not the value */
-        variable(llvm::Value* pVar);
-        variable(int tok, const char* varname);
-        ~variable();
-        llvm::Value* set_value(llvm::Constant* pVal);
-    };
+		int type() const { return m_type; }
+		int type() { return m_type; }
+		const std::string& name() const
+		{
+			return m_name;
+		}
 
-    struct parameter
-    {
-        int typeId;
-        std::string name;    // parameter should have names
-        llvm::Type* llvmType;
-        parameter(int tok, const char* pname);
-        ~parameter();
-    };
+		statement* get_parent() { return m_parent; }
+		statement* get_next() { return m_next; }
+		statement* get_prev() { return m_prev; }
 
-    struct expression
-    {
-        int typeId;
-        int isConstant; // dont define bool, because we use bison/flex in C mode
-        std::variant<variable*, llvm::Value*, llvm::Constant*> value;
-        expression(variable* pvar);
+		statement* insert_last(int tok, const char* sname);
+		statement* insert_before(int tok, const char* sname);
+		statement* insert_after(int tok, const char* sname);
 
-        // If the token is BOOLEAN, then we will create i1 type,
-        // otherwise we will create i8
-        expression(int tok, char bValue);
-        expression(int iVal);
-        expression(long lval);
-        expression(const char* psz);
-        expression(float fVal);
-        expression(double dblVal);
-        ~expression();
-        void print(std::string& buffer);
-    };
+	protected:
+		int m_type;
+		std::string m_name;
+		statement* m_parent;
+		statement* m_next;
+		statement* m_prev;
+	    statement* m_children;
+		void remove_next();
+	};
 
-    struct declaration
-    {
-        int typeId;
-        std::string name;
+	class dim_stmt : public statement
+	{
+	public:
+		dim_stmt();
+		dim_stmt(llvm::BasicBlock* parentBlock);
+		~dim_stmt();
 
-        // use this if function_decl
-        std::vector<parameter>* params;
+		const std::list<llvm::AllocaInst*>& get_variable_list() const
+		{ return m_varlist; }
+		llvm::AllocaInst* add_variable(int nType, const char* vName);
 
-        // only use this if variable_decl
-        std::vector<variable>* vars;
+		void print_debug();
 
-        // only use return_type if this is a function_decl
-        llvm::Type* return_type;
+	private:
+		llvm::BasicBlock* m_parentBlock;
+		std::list<llvm::AllocaInst*> m_varlist;
+	};
 
-        declaration(int tok, const char* dname);
-        ~declaration();
+	class if_stmt : public statement
+	{
+	public:
+		if_stmt();
+		if_stmt(if_stmt* topIf, int tok, const char* _ifname);
+		if_stmt(llvm::BasicBlock* bb);
+		if_stmt(llvm::BasicBlock* bb, llvm::Value* cond);
+		~if_stmt();
 
-        void print_all(std::string& buffer);
-    };
+		llvm::BasicBlock* true_block();
+		llvm::BasicBlock* false_block();
+		llvm::BasicBlock* exit_block();
+		llvm::BasicBlock* get_parent();
 
-    struct constant_value
-    {
-        int typeId; // basic typeid, from token
-        std::variant<llvm::Value*, llvm::Constant*> value;
-        constant_value() {} // do nothing constructor
-        ~constant_value() {}
-        void print(std::string& buffer);
-    };
+		void get_debug_string(std::string& buffer);
 
-    struct for_statement
-    {
-        int typeId;
-        llvm::Value* control;
-        llvm::Value* controlState;
-        llvm::Value* stepValue;
-        llvm::BasicBlock* blockHead;
-        llvm::BasicBlock* blockTail;
-        for_statement();
-        for_statement(llvm::Function* _parent, const char* _name);
-        ~for_statement();
-    };
+		// make the branch with the given condition,
+		// if the branch already existed, it will do nothing.
+		// The return value is the branch.
+		llvm::Value* set_branch(llvm::Value* cond);
+		llvm::Value* set_branch();
+		llvm::Value* make_end_if();
 
-    class interpreter : public llvm::LLVMContext
-    {
-    public:
-        interpreter(const char* modname);
-        virtual ~interpreter();
+	private:
+		llvm::BasicBlock* m_parentBlock;
+		llvm::Value* m_cond;
+		llvm::Value* m_branch;
+		llvm::BasicBlock* m_trueBlock;
+		llvm::BasicBlock* m_exitBlock;
+		llvm::BasicBlock* m_falseBlock;
+	};
 
-        void print_version(std::ostream& os);
-        int eval(const std::string& strLine);
+	class interpreter : public llvm::LLVMContext
+	{
+	public:
+		interpreter(const char* src);
+		~interpreter();
 
-        // these function will generate appropriate types
-        // according to the specified token, although
-        // the values givin in long and double
-        constant_value* get_constant(int tok, long ival);
-        constant_value* get_constant(int tok, double fval);
+		std::unique_ptr<llvm::Module>& get_module()
+		{ return *(std::unique_ptr<llvm::Module>*)&module; }
+		llvm::BasicBlock* get_entry()
+		{ return m_entryBlock; }
+		llvm::BasicBlock* get_exit()
+		{ return m_exitBlock; }
 
-        // this will surely generate type STRING for the constant
-        // and declare no name internal unnamed_addr field,
-        // which most likely will be numbered by LLVM.
-        constant_value* get_constant(const char* pszText);
+		// return function that's being edited
+		llvm::Function* get_current_function();
 
-        llvm::BasicBlock* get_entry();
+		// exit the interpreter session
+		// make ret void as necessary for main()
+		void quit();
 
-        llvm::BasicBlock* get_current_block();
-        void map_variable_name(llvm::BasicBlock* bb, const char* pszname, llvm::AllocaInst* inst);
+		void print_module(std::string& buffer);
+		void print_version(std::ostream& os);
+		int eval(const std::string& strCode);
 
-        // return the AllocaInst as Value*, if available, or nullptr
-        llvm::Value* get_variable(llvm::BasicBlock* bb, const char* pszName);
+		// BASIC TypeID to llvm::Type
+		llvm::Type* get_llvm_type(int nType);
+		llvm::Value* get_variable(llvm::BasicBlock* bb, const char* pszVarName);
 
-        void print_module(std::string& buffer);
+		// Constant Values
+		llvm::Constant* get_constant_long(long nValue);
+		llvm::Constant* get_constant_double(double d);
 
-        // returns LLVM type for the BASIC typeID
-        llvm::Type* get_llvm_type(int nTypeID);
+		llvm::Value* find_variable(const char* pszname);
+		llvm::Constant* find_function(const char* pszname);
 
-        bool is_zero(llvm::Value* pValue);
+		llvm::BasicBlock* get_current_block();
+		void set_current_block(llvm::BasicBlock* bb);
 
-        // assign RHS into LHS, do cast if necessary
-        llvm::Value* assign_value(llvm::Value* lhs, llvm::Value* rhs);
-
-        llvm::Value* make_add(llvm::Value* lhs, llvm::Value* rhs);
-        llvm::Value* make_subtract(llvm::Value* lhs, llvm::Value* rhs);
-        llvm::Value* make_multiply(llvm::Value* lhs, llvm::Value* rhs);
-        llvm::Value* make_divide(llvm::Value* lhs, llvm::Value* rhs);
-        llvm::Value* make_pow(llvm::Value* lhs, llvm::Value* rhs);
-
-        // declare a new BASIC Sub with the given name
-        using ParameterList = std::list<std::tuple<std::string, llvm::Type*>>;
-        llvm::Function* make_sub(const char* pszname);
-        llvm::Function* make_sub(const char* pszname, ParameterList* plist);
-        llvm::Function* make_function(const char* pszname, llvm::Type* return_type);
-        llvm::Function* make_function(const char* pszname, llvm::Type* return_type, ParameterList* plist);
+		llvm::Value* make_return_value(llvm::Constant* fn, llvm::Value* pVal);
+		llvm::Value* make_equal_comparison(llvm::Value* lhs, llvm::Value* rhs);
+		llvm::Value* assign_variable(llvm::Value* pVar, llvm::Value* pVal);
 
 
-        // we have to be in a valid block to make this call.
-        // it does not mean the end of the function/sub though
-        // it can also return from a branch.
-        llvm::Value* make_return_value(llvm::Value* pVal);
+		llvm::Value* make_add(llvm::Value* lhs, llvm::Value* rhs);
+		llvm::Value* make_subtract(llvm::Value* lhs, llvm::Value* rhs);
+		llvm::Value* make_mult(llvm::Value* lhs, llvm::Value* rhs);
+		llvm::Value* make_divide(llvm::Value* lhs, llvm::Value* rhs);
+		llvm::Value* make_compare_less_than(llvm::Value* lhs, llvm::Value* rhs);
+		llvm::Value* make_compare_greater_than(llvm::Value* lhs, llvm::Value* rhs);
+		llvm::Value* make_pow(llvm::Value* lhs, llvm::Value* rhs);
 
-        // will pop the current function/stack and the current block
-        // from the stack.
-        // after this, the program will return to previous block
-        // This function returns the last Function that was popped out.
-        llvm::Function* make_end_sub();
-        llvm::Function* make_end_function();
+		// Utilities to cast values
+		std::tuple<llvm::Value*, llvm::Value*> cast_as_needed(llvm::Value* lhs, llvm::Value* rhs);
+		llvm::Value* cast_for_assignment(llvm::Value* pVal, llvm::Type* pType);
+		llvm::Value* cast_to_double(llvm::Value* pValue);
 
-        bool is_function_name(const char* pszname);
-        bool is_current_function_name(const char* pszname);
+		void push_context(statement* pNew);
+		// pop and remove the statement from the list
+		statement* pop_context();
+		// does not pop
+		statement* last_context();
 
-        // call function with no parameters, but with return value void
-        // use for Sub
-        //   JustDoIt <no args>
-        //   DoSomething arg0, arg1, arg2
-        // But if it is a Function (not Sub), then it can also be:
-        //   var1 = ChangeForThis(arg0)
-        //   var1 = JustGiveMeValue()
-        //
-        // Note that to take a value you must call a Function with
-        // a pair of parenthesis, although it has no args, otherwise
-        // the call will be treated as Sub call.
-        //
-        // But make_void_call() will only return a Void llvm::Value,
-        // if you need a real value, use make_call()
-        llvm::Value* make_void_call(const char* pszFunctionName);
-        llvm::Value* make_void_call(const char* pszFunctionName, std::vector<llvm::Value*>& arglist);
-
-        // call function that return a value
-        // use for calling function and take the return value
-        // i.e var1 = test1(1234, "testing") or
-        //
-        llvm::Value* make_call(const char* pszFunctionName, std::vector<llvm::Value*>& arglist);
-
-        for_statement* push_for_statement_block(std::string& varControlName, llvm::Value* startValue, llvm::Value* endValue);
-        for_statement* next_block();
-
-
-    protected:
-        std::unique_ptr<llvm::Module> sp_mod;
-        std::unique_ptr<llvm::Function> m_fmain;
-        std::unique_ptr<llvm::BasicBlock> m_entry;
-
-        // string is the name of the function
-        using VariableList = std::list<std::tuple<std::string, llvm::AllocaInst*>>;
-        std::map<llvm::BasicBlock*, VariableList> m_varMap;
-        std::list<llvm::BasicBlock*> m_blockStack;
-        std::list<for_statement*> forStatementList;
-
-        std::tuple<llvm::Value*, llvm::Value*> cast_as_needed(llvm::Value* l, llvm::Value* r);
-
-        llvm::Value* cast_for_call(llvm::Value* p, llvm::Type* destType);
-    };
+	private:
+		std::unique_ptr<llvm::Module> module;
+		llvm::BasicBlock* m_entryBlock;
+		llvm::BasicBlock* m_exitBlock;
+		std::list<llvm::Function*> m_functions;
+		llvm::BasicBlock* m_activeBlock;
+		std::list<statement*> m_statementList;
+	};
 }
 
 typedef union basic_parser_types
 {
-    int typeID;
-    char* identifier;
-    basic::expression* expr;
-    basic::variable* var;
-
-    // this will be a function's parameter list
-    std::vector<basic::parameter>* paramlist;
-
-    // actually this is just the same as above,
-    // but we need a place to hang the names
-    // for DIM and the like.
-    std::vector<basic::variable>* varlist;
-    basic::declaration* decl;
-    basic::for_statement* forStatementPtr;
-
-    // no intermediate struct needed, we directly
-    // use llvm types
-    llvm::Value* llvmValuePtr;
-    llvm::Constant* llvmConstantPtr;
-    std::list<std::tuple<std::string, llvm::Type*>>* llvmTypeList;
-    std::vector<llvm::Value*>* llvmValueList;
+	int typeID;
+	char* identifier;
+	llvm::Value* llvmValue;
+	llvm::Constant* llvmConstant;
+	std::list<std::tuple<std::string, llvm::Type*>>* llvmTypeList;
+	std::vector<llvm::Value*>* llvmValueList;
+	basic::dim_stmt* dim;
+	basic::if_stmt* ifStmt;
 } basic_parser_types;
 
 #endif /* BASIC_COMMON_H */

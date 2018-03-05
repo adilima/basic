@@ -1,22 +1,25 @@
-SOURCES = parser.cpp lexer.cpp main.cpp interp.cpp objects.cpp
-OBJECTS = parser.o lexer.o main.o interp.o objects.o
-LIBS = `llvm-config --libs` -pthread -ldl -lm -lrt -lncursesw
+
+SOURCES = parser.cpp lexer.cpp interp.cpp main.cpp basic.cpp if_stmt.cpp
+OBJECTS = parser.o lexer.o interp.o main.o basic.o if_stmt.o
+
+LIBS    = -pthread -ldl -lm -lrt -lncursesw `llvm-config --libs`
 LDFLAGS = `llvm-config --ldflags` -L.
-CFLAGS  = `llvm-config --cflags --cxxflags` \
-	-std=c++17 -fexceptions \
-	-O2 -fomit-frame-pointer -c
 
-CXX = g++
+CFLAGS  = `llvm-config --cflags --cxxflags` -O2 -fexceptions -fomit-frame-pointer -std=c++17 -c
 
-TARGET = basic
+CXX     = g++
+
+TARGET  = basic
 
 all: $(TARGET)
 
 $(TARGET): $(OBJECTS)
 	$(CXX) -o $(TARGET) $(OBJECTS) $(LDFLAGS) $(LIBS)
 
+
 %.o: %.cpp
 	$(CXX) $(CFLAGS) -o $@ $<
+
 
 parser.cpp: parser.y
 	bison -d parser.y
@@ -26,6 +29,6 @@ lexer.cpp: lexer.l
 
 
 clean:
-	rm -fv $(TARGET) $(OBJECTS) parser.cpp parser.hpp lexer.cpp
-
+	rm -fv $(TARGET) $(OBJECTS)
+	rm -fv parser.{cpp,hpp} lexer.cpp
 
